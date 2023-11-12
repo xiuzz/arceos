@@ -57,7 +57,7 @@ impl ByteAllocator for EarlyByteAllocator {
         let size = layout.size();
         self.used_bytes -= size;
         if self.used_bytes == 0 {
-            self.pos = 0;
+            self.pos = self.start;
         }
     }
 
