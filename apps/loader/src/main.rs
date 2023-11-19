@@ -27,10 +27,11 @@ fn abi_putchar(c: char) {
     println!("[ABI:Print] {c}");
 }
 
-fn abi_terminate() {
+fn abi_terminate(exit_code: i32) {
     println!("[ABI:terminate] exit the terminal!");
-    exit(1);
+    exit(exit_code);
 }
+
 
 struct ImageHeader{
     ptr_len: usize
@@ -122,21 +123,11 @@ fn main() {
         let arg0: u8 = b'A';
         // execute app
         unsafe { core::arch::asm!("
-            li      t0, {abi_num}
-            slli    t0, t0, 3
-            la      t1, {abi_table}
-            add     t1, t1, t0
-            ld      t1, (t1)
-            jalr    t1
+            la      a7, {abi_table}
             li      t2, {run_start}
-            jalr    t2
-            j       .",
+            jalr    t2",
             run_start = const RUN_START,
             abi_table = sym ABI_TABLE,
-            //abi_num = const SYS_HELLO,
-            // abi_num = const SYS_PUTCHAR,
-            // in("a0") arg0,
-            abi_num = const SYS_TERMINATE,
         )}
         println!("App {} fininshed..........",i);
         println!("......................................");
