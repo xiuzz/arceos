@@ -2,10 +2,35 @@
 #![cfg_attr(feature = "axstd", no_main)]
 #![feature(asm_const)]
 
+
+
 #[cfg(feature = "axstd")]
 use axstd::println;
+#[cfg(feature = "axstd")]
+use axstd::process::exit;
 
 const PLASH_START: usize = 0x22000000;
+const SYS_HELLO: usize = 1;
+const SYS_PUTCHAR: usize = 2;
+const SYS_TERMINATE: usize = 3;
+static mut ABI_TABLE: [usize; 16] = [0; 16];
+
+fn register_abi(num: usize, handle: usize) {
+    unsafe { ABI_TABLE[num] = handle; }
+}
+
+fn abi_hello() {
+    println!("[ABI:Hello] Hello, Apps!");
+}
+
+fn abi_putchar(c: char) {
+    println!("[ABI:Print] {c}");
+}
+
+fn abi_terminate() {
+    println!("[ABI:terminate] exit the terminal!");
+    exit(1);
+}
 
 struct ImageHeader{
     ptr_len: usize
@@ -89,11 +114,29 @@ fn main() {
         println!("run code {:?}; address [{:?}]", run_code, run_code.as_ptr());
 
         println!("App:{}",i);
+
+        register_abi(SYS_HELLO, abi_hello as usize);
+        register_abi(SYS_PUTCHAR, abi_putchar as usize);
+        register_abi(SYS_TERMINATE, abi_terminate as usize);
+    
+        let arg0: u8 = b'A';
         // execute app
         unsafe { core::arch::asm!("
+            li      t0, {abi_num}
+            slli    t0, t0, 3
+            la      t1, {abi_table}
+            add     t1, t1, t0
+            ld      t1, (t1)
+            jalr    t1
             li      t2, {run_start}
-            jalr    t2",
+            jalr    t2
+            j       .",
             run_start = const RUN_START,
+            abi_table = sym ABI_TABLE,
+            //abi_num = const SYS_HELLO,
+            // abi_num = const SYS_PUTCHAR,
+            // in("a0") arg0,
+            abi_num = const SYS_TERMINATE,
         )}
         println!("App {} fininshed..........",i);
         println!("......................................");
