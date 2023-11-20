@@ -99,20 +99,23 @@ fn main() {
 
     println!("the app nums : {}", app_nums);
 
+    // switch aspace from kernel to app
+    unsafe { init_app_page_table(); }
+    unsafe { switch_app_aspace(); }
     //app x
-    const RUN_START : usize = 0xffff_ffc0_8010_0000;
+    const RUN_START : usize = 0x4010_0000;
     let mut app_start = PLASH_START + ptr_len;
     for i in 0..app_nums {
         let app_header = image_header.load_app(app_start);
         println!("start:{:#}",app_header.start);
         println!("size:{}", app_header.size);
-        println!("context:{:?}",app_header.content);
+        // println!("context:{:?}",app_header.content);
         app_start += app_header.size + ptr_len;
         let run_code = unsafe {
             core::slice::from_raw_parts_mut(RUN_START as *mut u8, app_header.size)
         };
         run_code.copy_from_slice(app_header.content);
-        println!("run code {:?}; address [{:?}]", run_code, run_code.as_ptr());
+        // println!("run code {:?}; address [{:?}]", run_code, run_code.as_ptr());
 
         println!("App:{}",i);
 
@@ -134,3 +137,29 @@ fn main() {
     }    
 }
 
+//
+// App aspace
+//
+#[link_section = ".data.app_page_table"]
+static mut APP_PT_SV39: [u64; 512] = [0; 512];
+
+unsafe fn init_app_page_table() {
+    // 0x8000_0000..0xc000_0000, VRWX_GAD, 1G block
+    APP_PT_SV39[2] = (0x80000 << 10) | 0xef;
+    // 0xffff_ffc0_8000_0000..0xffff_ffc0_c000_0000, VRWX_GAD, 1G block
+    APP_PT_SV39[0x102] = (0x80000 << 10) | 0xef;
+
+    // 0x0000_0000..0x4000_0000, VRWX_GAD, 1G block
+    APP_PT_SV39[0] = (0x00000 << 10) | 0xef;
+
+    // For App aspace!
+    // 0x4000_0000..0x8000_0000, VRWX_GAD, 1G block
+    APP_PT_SV39[1] = (0x80000 << 10) | 0xef;
+}
+
+unsafe fn switch_app_aspace() {
+    use riscv::register::satp;
+    let page_table_root = APP_PT_SV39.as_ptr() as usize - axconfig::PHYS_VIRT_OFFSET;
+    satp::set(satp::Mode::Sv39, 0, page_table_root >> 12);
+    riscv::asm::sfence_vma_all();
+}
